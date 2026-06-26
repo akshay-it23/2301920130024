@@ -126,3 +126,14 @@ Okay, so the math side of why this helps:
 *   **After (B-Tree Index Scan):** With the index, it's `O(log N)`. And because we put `createdAt DESC` right in the index, it's ALREADY SORTED! The database doesn't have to do the heavy lifting anymore. So it's just `O(log N + K)` (K is the few rows we actually want). 
 
 Basically, we stopped being stupid and making the server read everything, and now it just skips to the good part instantly.
+
+# Stage 4
+
+## How to stop the database from dying
+
+If everyone checks their notifications during midterms, our Postgres server is totally gonna crash. Here's how we reduce the load on the DB so that doesn't happen:
+
+*   **Redis Cache:** We don't need to ask the database "how many unread messages does bro have?" every single time they load a page. We just stash that number in a Redis cache (which is like, super fast temporary memory). 
+*   **API Cache:** If someone just refreshed their notifications like two seconds ago, we shouldn't hit the DB again. We just cache the API response for a bit and give them the saved copy.
+*   **Pagination & Infinite Scroll:** Instead of forcing the DB to spit out all 500 of someone's old notifications at once, we only grab the first 15. Then, when they scroll down (infinite scroll style), we just lazy load the next 15. The DB barely has to do any work this way.
+*   **CDN (Content Delivery Network)? Nah:** CDNs are awesome for caching static stuff like images or big CSS files globally. But notifications are totally personal to each user and constantly changing, so a CDN is completely useless here. Don't even bother.
