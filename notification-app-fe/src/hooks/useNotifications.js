@@ -1,20 +1,104 @@
-import { useState, useEffect } from "react";
-import { fetchNotifications } from "../apis/notifications";
+import { useEffect, useState } from "react";
+
+import { fetchNotifications } from "../api/notifications";
+import { logEvent } from "../utils/logger";
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    let isActive = true;
+
     const load = async () => {
-      const data = await fetchNotifications();
-      setNotifications(data.notifications ?? []);
+      logEvent("useNotifications", "info", "notification-app-fe", "Page load: fetching notifications");
+      setLoading(true);
+      setError("");
+
+      try {
+        const data = await fetchNotifications();
+
+        if (!isActive) {
+          return;
+        }
+
+        const fetchedNotifications = data.notifications ?? [];
+        setNotifications(fetchedNotifications);
+        logEvent(
+          "useNotifications",
+          "info",
+          "notification-app-fe",
+          `Page load success: ${fetchedNotifications.length} notifications ready`,
+        );
+      } catch (requestError) {
+        if (!isActive) {
+          return;
+        }
+
+        const message = requestError instanceof Error ? requestError.message : "Unknown error";
+        setNotifications([]);
+        setError(message);
+        logEvent("useNotifications", "error", "notification-app-fe", `API failure: ${message}`);
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
     };
 
     load();
-  }, [notifications]);
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
-  const totalPages = 0;
+  const createNotification = (notificationInput) => {
+    const nextNotification = {
+      id: Date.now(),
+      title: notificationInput.title,
+      message: notificationInput.message,
+      type: notificationInput.type,
+      isRead: false,
+      timestamp: new Date().toISOString(),
+    };
 
-  return { notifications, total, totalPages, loading: false, error: true };
+    setNotifications((currentNotifications) => [nextNotification, ...currentNotifications]);
+    logEvent(
+      "useNotifications",
+      "info",
+      "notification-app-fe",
+      `Notification created: ${nextNotification.title}`,
+    );
+
+    return nextNotification;
+  };
+
+  const deleteNotification = (notificationId) => {
+    setNotifications((currentNotifications) =>
+      currentNotifications.filter((notification) => notification.id !== notificationId),
+    );
+    logEvent(
+      "useNotifications",
+      "info",
+      "notification-app-fe",
+      `Notification deleted: ${notificationId}`,
+    );
+  };
+
+  const markAsRead = (notificationId) => {
+    setNotifications((currentNotifications) =>
+      currentNotifications.map((notification) =>
+        notification.id === notificationId ? { ...notification, isRead: true } : notification,
+      ),
+    );
+    logEvent(
+      "useNotifications",
+      "info",
+      "notification-app-fe",
+      `Notification marked as read: ${notificationId}`,
+    );
+  };
+
+  return { notifications, loading, error, createNotification, deleteNotification, markAsRead };
 }
