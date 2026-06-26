@@ -1,19 +1,19 @@
 # Stage 1
 
-Here is the initial design for the notification system REST APIs.
+Yo, so here's the vibe for the notification system REST APIs. 
 
 ## REST APIs
 
-We will expose the following endpoints to manage notifications:
+We basically need these endpoints so things actually work:
 
-* `GET /notifications` - To fetch a list of notifications for the current user.
-* `POST /notifications` - To create a brand new notification.
-* `PUT /notifications/:id/read` - To mark a specific notification as read.
-* `DELETE /notifications/:id` - To remove a notification.
+* `GET /notifications` - Gimme all my notifications bro.
+* `POST /notifications` - Make a new notification happen.
+* `PUT /notifications/:id/read` - Mark that one notification as read so the red dot goes away.
+* `DELETE /notifications/:id` - Delete it 'cause I don't want to see it anymore.
 
 ## JSON Structure
 
-A standard notification object will have this JSON structure:
+This is what the data looks like, just a basic JSON thing:
 
 ```json
 {
@@ -27,23 +27,23 @@ A standard notification object will have this JSON structure:
 }
 ```
 
-## Additional Details
+## Extra Stuff
 
 **Headers:**
-All requests will require an `Authorization` header to ensure only authenticated users can access or modify their notifications.
+You gotta send an `Authorization` header or else the server's gonna be like "who are you?" and block you.
 
 **Status Codes:**
-We'll use standard HTTP status codes to indicate the result of a request. For example:
-* `200 OK` for successful operations.
-* `201 Created` when a notification is successfully posted.
-* `400 Bad Request` if the request payload is invalid.
-* `401 Unauthorized` if the user is not authenticated.
-* `404 Not Found` if trying to read or delete a notification that doesn't exist.
-* `500 Internal Server Error` for any server-side hiccups.
+Just normal internet numbers:
+* `200 OK` - It worked, chill.
+* `201 Created` - We made the thing.
+* `400 Bad Request` - You messed up sending the data.
+* `401 Unauthorized` - You're not logged in, dude.
+* `404 Not Found` - That notification straight up doesn't exist.
+* `500 Internal Server Error` - The server caught on fire.
 
 **Response Examples:**
 
-Here's an example of what a successful response from `GET /notifications` might look like:
+If you ask for notifications, it spits this out:
 
 ```json
 [
@@ -63,21 +63,21 @@ Here's an example of what a successful response from `GET /notifications` might 
 
 ## Database Choice
 
-So, for the database, I'm definitely going with **PostgreSQL**.
+I'm picking **PostgreSQL** because honestly everyone uses it and it's free.
 
-Why? Basically, Postgres is super robust and can handle pretty much anything we throw at it. Since notifications involve a lot of user data and we might need complex queries later on, a relational database just makes sense. Plus, it's open-source and free, which is perfect for a college project!
+Why? It's like, super reliable and doesn't crash when you look at it funny. It's a relational database which is good because notifications have relations and stuff. Perfect for a project where we have zero budget.
 
-Here's how we're going to optimize it:
+Here's how we're gonna make it not slow:
 
-*   **Indexing:** We'll definitely need indexes on `user_id` and `is_read` so that pulling a user's unread notifications is super fast. If we don't index, the query will scan the whole table and get really slow.
-*   **Pagination:** We can't just load all notifications at once if a user has thousands of them. We'll use cursor-based or offset pagination to load them in chunks (like 20 at a time) when the user scrolls down.
-*   **Partitioning:** If this gets huge, we can partition the table by `created_at` (like splitting it into monthly chunks). This keeps the active data small and fast to query.
-*   **Caching:** To save DB trips, we can use something like Redis to cache the unread notification count. That way, every time a user loads a page, we don't have to hit Postgres just to show that little red dot.
-*   **Connection Pooling:** We'll use a connection pooler so we don't overwhelm Postgres with too many direct connections.
+*   **Indexing:** We need indexes on `user_id` and `is_read`. If we don't, the DB is gonna read the whole table and my laptop will probably melt trying to load the page.
+*   **Pagination:** Don't load 10,000 notifications at once. Just load like 20 when they scroll. Duh.
+*   **Partitioning:** If we get too many rows, we just slice the table into monthly chunks so it doesn't get ridiculously big.
+*   **Caching:** Throw Redis in there so we don't have to bother Postgres every time we just need to know if they have 3 unread messages. 
+*   **Connection Pooling:** Use this so Postgres doesn't freak out if 50 students try to check their notifications at the same exact time right before class.
 
 ## SQL Schema
 
-Here's the basic schema for the notifications table:
+Here's the table code thing:
 
 ```sql
 CREATE TABLE notifications(
@@ -89,3 +89,40 @@ CREATE TABLE notifications(
  created_at TIMESTAMP
 );
 ```
+
+# Stage 3
+
+## Why is it so slow tho?
+
+Someone asked why this query is taking literally forever:
+
+```sql
+SELECT * FROM notifications
+WHERE studentId=1042
+AND isRead=false
+ORDER BY createdAt;
+```
+
+Here's why it's being dumb:
+
+1.  **No Index:** There's no index, so the database has no clue where to look. It's like looking for a word in a book without an index page.
+2.  **Full Table Scan:** It's literally checking every single row one by one. If we have a million notifications, it's gonna take all day.
+3.  **Sorting is Expensive:** The `ORDER BY createdAt` part means it has to take all that messy data and organize it in memory before it gives it to you. That takes up so much brain power for the server.
+
+## The Fix
+
+Just make a composite index like this, it fixes everything:
+
+```sql
+CREATE INDEX idx_notification
+ON notifications(studentId, isRead, createdAt DESC);
+```
+
+## Complexity Improvement
+
+Okay, so the math side of why this helps:
+
+*   **Before (Full Table Scan + Sort):** The time complexity is like `O(N + M log M)`. Basically N is the whole table and M is the stuff it finds. It has to scan everything and then sort it, which is terrible.
+*   **After (B-Tree Index Scan):** With the index, it's `O(log N)`. And because we put `createdAt DESC` right in the index, it's ALREADY SORTED! The database doesn't have to do the heavy lifting anymore. So it's just `O(log N + K)` (K is the few rows we actually want). 
+
+Basically, we stopped being stupid and making the server read everything, and now it just skips to the good part instantly.
