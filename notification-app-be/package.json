@@ -1,0 +1,15 @@
+{
+  "name": "notification-app-be",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Notification app backend",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

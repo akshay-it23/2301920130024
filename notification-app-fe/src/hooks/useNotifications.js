@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { fetchNotifications } from "../api/notifications";
+import {
+  createNotification as createNotificationRequest,
+  deleteNotification as deleteNotificationRequest,
+  fetchNotifications,
+  markNotificationAsRead as markNotificationAsReadRequest,
+} from "../api/notifications";
 import { logEvent } from "../utils/logger";
 
 export function useNotifications(filter = "All", page = 1, limit = 5) {
@@ -55,50 +60,33 @@ export function useNotifications(filter = "All", page = 1, limit = 5) {
     };
   }, [filter, page, limit]);
 
-  const createNotification = (notificationInput) => {
-    const nextNotification = {
-      id: Date.now(),
-      title: notificationInput.title,
-      message: notificationInput.message,
-      type: notificationInput.type,
-      isRead: false,
-      timestamp: new Date().toISOString(),
-    };
+  const refreshNotifications = async () => {
+    const data = await fetchNotifications(filter, page, limit);
+
+    setNotifications(data.notifications ?? []);
+    setTotalPages(data.totalPages ?? 1);
+  };
+
+  const createNotification = async (notificationInput) => {
+    const nextNotification = await createNotificationRequest(notificationInput);
 
     setNotifications((currentNotifications) => [nextNotification, ...currentNotifications]);
-    logEvent(
-      "useNotifications",
-      "info",
-      "notification-app-fe",
-      `Notification created: ${nextNotification.title}`,
-    );
+    setTotalPages((currentTotalPages) => Math.max(1, currentTotalPages));
+
+    logEvent("useNotifications", "info", "notification-app-fe", `Notification created: ${nextNotification.title}`);
     return nextNotification;
   };
 
-  const deleteNotification = (notificationId) => {
-    setNotifications((currentNotifications) =>
-      currentNotifications.filter((notification) => notification.id !== notificationId),
-    );
-    logEvent(
-      "useNotifications",
-      "info",
-      "notification-app-fe",
-      `Notification deleted: ${notificationId}`,
-    );
+  const deleteNotification = async (notificationId) => {
+    await deleteNotificationRequest(notificationId);
+    await refreshNotifications();
+    logEvent("useNotifications", "info", "notification-app-fe", `Notification deleted: ${notificationId}`);
   };
 
-  const markAsRead = (notificationId) => {
-    setNotifications((currentNotifications) =>
-      currentNotifications.map((notification) =>
-        notification.id === notificationId ? { ...notification, isRead: true } : notification,
-      ),
-    );
-    logEvent(
-      "useNotifications",
-      "info",
-      "notification-app-fe",
-      `Notification marked as read: ${notificationId}`,
-    );
+  const markAsRead = async (notificationId) => {
+    await markNotificationAsReadRequest(notificationId);
+    await refreshNotifications();
+    logEvent("useNotifications", "info", "notification-app-fe", `Notification marked as read: ${notificationId}`);
   };
 
   return { notifications, totalPages, loading, error, createNotification, deleteNotification, markAsRead };
