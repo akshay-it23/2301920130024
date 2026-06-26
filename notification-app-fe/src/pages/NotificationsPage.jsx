@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Badge,
@@ -8,38 +8,24 @@ import {
   Pagination,
   Stack,
   Typography,
+  Tabs,
+  Tab
 } from "@mui/material";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 
 import { NotificationCard } from "../components/NotificationCard";
 import { NotificationForm } from "../components/NotificationForm";
-import { NotificationFilter } from "../components/NotificationFilter";
 import { useNotifications } from "../hooks/useNotifications";
 import { logEvent } from "../utils/logger";
 
-const pageSize = 3;
+const PAGE_LIMIT = 3;
 
 export function NotificationsPage() {
-  const [filter, setFilter] = useState("All");
+  const [currentTab, setCurrentTab] = useState("All");
   const [page, setPage] = useState(1);
 
-  const { notifications, loading, error, createNotification, deleteNotification, markAsRead } =
-    useNotifications();
-
-  const filteredNotifications = useMemo(() => {
-    if (filter === "All") {
-      return notifications;
-    }
-
-    return notifications.filter((notification) => notification.type === filter);
-  }, [filter, notifications]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredNotifications.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleNotifications = filteredNotifications.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  const { notifications, totalPages, loading, error, createNotification, deleteNotification, markAsRead } =
+    useNotifications(currentTab, page, PAGE_LIMIT);
 
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
@@ -50,46 +36,35 @@ export function NotificationsPage() {
       "NotificationsPage",
       "info",
       "notification-app-fe",
-      `Create notification flow completed for ${notificationInput.title}`,
+      `Notification created: ${notificationInput.title}`,
     );
   };
 
-  const handleFilterChange = (newFilter) => {
-    if (!newFilter) {
-      logEvent("NotificationsPage", "warn", "notification-app-fe", "Validation warning: empty filter ignored");
-      return;
-    }
-
-    setFilter(newFilter);
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
     setPage(1);
     logEvent(
       "NotificationsPage",
       "info",
       "notification-app-fe",
-      `Filter changed to ${newFilter}`,
+      `Tab changed to ${newValue}`,
     );
-
   };
 
   const handlePageChange = (_, newPage) => {
-    if (newPage < 1) {
-      logEvent("NotificationsPage", "warn", "notification-app-fe", "Validation warning: invalid page requested");
-      return;
-    }
-
+    if (newPage < 1) return;
     setPage(newPage);
     logEvent("NotificationsPage", "info", "notification-app-fe", `Page changed to ${newPage}`);
-
   };
 
   const handleMarkAsRead = (notificationId) => {
     markAsRead(notificationId);
-    logEvent("NotificationsPage", "info", "notification-app-fe", `Marked as read: ${notificationId}`);
+    logEvent("NotificationsPage", "info", "notification-app-fe", `Notification marked as read: ${notificationId}`);
   };
 
   const handleDelete = (notificationId) => {
     deleteNotification(notificationId);
-    logEvent("NotificationsPage", "info", "notification-app-fe", `Deleted notification: ${notificationId}`);
+    logEvent("NotificationsPage", "info", "notification-app-fe", `Notification deleted: ${notificationId}`);
   };
 
   return (
@@ -109,8 +84,19 @@ export function NotificationsPage() {
         <NotificationForm onCreate={handleCreateNotification} />
       </Box>
 
-      <Box sx={{ marginBottom: 3 }}>
-        <NotificationFilter value={filter} onChange={handleFilterChange} />
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', marginBottom: 3 }}>
+        <Tabs 
+          value={currentTab} 
+          onChange={handleTabChange} 
+          aria-label="notification tabs"
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab label="All" value="All" />
+          <Tab label="Event" value="Event" />
+          <Tab label="Result" value="Result" />
+          <Tab label="Placement" value="Placement" />
+        </Tabs>
       </Box>
 
       {loading && (
@@ -127,9 +113,9 @@ export function NotificationsPage() {
         <Alert severity="info">No notifications found.</Alert>
       )}
 
-      {!loading && !error && filteredNotifications.length > 0 && (
+      {!loading && !error && notifications.length > 0 && (
         <Stack spacing={1.5}>
-          {visibleNotifications.map((notification) => (
+          {notifications.map((notification) => (
             <NotificationCard
               key={notification.id}
               notification={notification}
@@ -140,11 +126,11 @@ export function NotificationsPage() {
         </Stack>
       )}
 
-      {!loading && filteredNotifications.length > 0 && (
+      {!loading && notifications.length > 0 && (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
           <Pagination
             count={totalPages}
-            page={currentPage}
+            page={page}
             onChange={handlePageChange}
             color="primary"
             shape="rounded"

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-
 import { fetchNotifications } from "../api/notifications";
 import { logEvent } from "../utils/logger";
 
-export function useNotifications() {
+export function useNotifications(filter = "All", page = 1, limit = 5) {
   const [notifications, setNotifications] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -12,12 +12,12 @@ export function useNotifications() {
     let isActive = true;
 
     const load = async () => {
-      logEvent("useNotifications", "info", "notification-app-fe", "Page load: fetching notifications");
+      logEvent("useNotifications", "info", "notification-app-fe", "Fetching notifications");
       setLoading(true);
       setError("");
 
       try {
-        const data = await fetchNotifications();
+        const data = await fetchNotifications(filter, page, limit);
 
         if (!isActive) {
           return;
@@ -25,18 +25,20 @@ export function useNotifications() {
 
         const fetchedNotifications = data.notifications ?? [];
         setNotifications(fetchedNotifications);
+        setTotalPages(data.totalPages ?? 1);
+        
         logEvent(
           "useNotifications",
           "info",
           "notification-app-fe",
-          `Page load success: ${fetchedNotifications.length} notifications ready`,
+          `Successfully fetched ${fetchedNotifications.length} notifications`,
         );
       } catch (requestError) {
         if (!isActive) {
           return;
         }
 
-        const message = requestError instanceof Error ? requestError.message : "Unknown error";
+        const message = requestError instanceof Error ? requestError.message : "An error occurred";
         setNotifications([]);
         setError(message);
         logEvent("useNotifications", "error", "notification-app-fe", `API failure: ${message}`);
@@ -51,7 +53,7 @@ export function useNotifications() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [filter, page, limit]);
 
   const createNotification = (notificationInput) => {
     const nextNotification = {
@@ -70,7 +72,6 @@ export function useNotifications() {
       "notification-app-fe",
       `Notification created: ${nextNotification.title}`,
     );
-
     return nextNotification;
   };
 
@@ -100,5 +101,5 @@ export function useNotifications() {
     );
   };
 
-  return { notifications, loading, error, createNotification, deleteNotification, markAsRead };
+  return { notifications, totalPages, loading, error, createNotification, deleteNotification, markAsRead };
 }

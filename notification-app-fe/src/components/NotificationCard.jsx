@@ -16,7 +16,15 @@ export function NotificationCard({ notification, onMarkAsRead, onDelete }) {
   }
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 3 }}>
+    <Card 
+      variant="outlined" 
+      sx={{ 
+        borderRadius: 3,
+        opacity: notification.isRead ? 0.6 : 1,
+        bgcolor: notification.isRead ? 'action.hover' : 'background.paper',
+        transition: 'all 0.3s ease'
+      }}
+    >
       <CardContent>
         <Stack spacing={1}>
           <Stack
