@@ -137,3 +137,45 @@ If everyone checks their notifications during midterms, our Postgres server is t
 *   **API Cache:** If someone just refreshed their notifications like two seconds ago, we shouldn't hit the DB again. We just cache the API response for a bit and give them the saved copy.
 *   **Pagination & Infinite Scroll:** Instead of forcing the DB to spit out all 500 of someone's old notifications at once, we only grab the first 15. Then, when they scroll down (infinite scroll style), we just lazy load the next 15. The DB barely has to do any work this way.
 *   **CDN (Content Delivery Network)? Nah:** CDNs are awesome for caching static stuff like images or big CSS files globally. But notifications are totally personal to each user and constantly changing, so a CDN is completely useless here. Don't even bother.
+
+# Stage 5
+
+## How to blast 50,000 students without breaking everything
+
+Someone asked how we actually send a notification to like, the entire campus at once. 
+
+If we do it the stupid way, the architecture looks like this:
+
+**The Stupid Way (Don't do this):**
+```text
+Loop through 50k users 
+       ↓
+  Send Email 
+       ↓
+   Save to DB
+```
+Why is this bad? Because sending an email takes time. If one email takes half a second, we're making the server sit there spinning for hours. The whole app will literally freeze and crash.
+
+**The Smart Way:**
+Instead, we gotta do this asynchronously using a Message Queue so the main server doesn't get stuck.
+
+```text
+  Notify All 
+       ↓
+ Message Queue (It just holds the tasks)
+       ↓
+    Workers (Background guys doing the hard work)
+   ↓       ↓
+ Email    Push
+```
+
+Basically, the main server just dumps 50,000 sticky notes into a bucket (the queue) and says "I'm done!" instantly. Then, background worker programs grab those notes from the bucket one by one and actually send the emails or push notifications.
+
+## Tools to use
+To make the bucket thing work, we can use stuff like:
+*   **RabbitMQ:** Solid, old-school choice.
+*   **Kafka:** Super heavy duty if we suddenly become the next Facebook.
+*   **BullMQ:** Really nice if we are just using Node.js and Redis.
+
+## Retries (Because stuff breaks)
+What happens if the email server is down or a phone has no signal? With the message queue, if a worker fails to send a message, it doesn't just give up and cry. It tosses the sticky note back into the bucket to **retry** later. We can tell it to try like 3 times before finally giving up, so we don't accidentally miss someone.
